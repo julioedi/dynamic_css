@@ -1,5 +1,5 @@
 (() => {
-    
+
     /**
      * https://github.com/julioedi/dynamic_css/
      * CustomCssSheet dynamically generates CSS classes based on naming conventions,
@@ -197,33 +197,45 @@
         }
 
         observer() {
-            const observer = new MutationObserver(mutations => {
-                mutations.forEach(mutation => {
+            var debounceTimeout = null;
+            var queue = [];
+
+            function processQueue(self) {
+                while (queue.length > 0) {
+                    var el = queue.shift();
+                    if (el) self.gotClassName(el);
+                }
+                debounceTimeout = null;
+            }
+
+            var observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
                     if (mutation.type === "childList") {
-                        mutation.addedNodes.forEach(node => {
+                        mutation.addedNodes.forEach(function (node) {
                             if (node.nodeType === 1 && node.classList.length > 0) {
-                                this.gotClassName(node)
+                                queue.push(node);
                             }
-                        })
+                        });
                     }
 
-                    if (
-                        mutation.type === "attributes" &&
-                        mutation.attributeName === "class"
-                    ) {
-                        const target = mutation.target
-                        this.gotClassName(target)
+                    if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                        queue.push(mutation.target);
                     }
-                })
-            })
+                });
+
+                // Debounce: wait 100ms after the last mutation
+                if (debounceTimeout) clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(processQueue, 100, this);
+            }.bind(this));
 
             observer.observe(document.head.parentElement, {
                 childList: true,
                 subtree: true,
-                attributes: true, // 🔥 Esto observa cambios en atributos
-                attributeFilter: ["class"] // 🔍 Solo nos importa el atributo 'class'
-            })
+                attributes: true,
+                attributeFilter: ["class"]
+            });
         }
+
 
         pseudo = /\:(hover|focus|active|visited|link|checked|disabled|empty|valid|invalid|focus-within)$/
         processClassname(item) {
@@ -238,7 +250,7 @@
                 if (index !== -1) {
                     this.addClass(item, index + 1, pseudo ? pseudo[1] : null);
                 }
-                
+
             } else {
                 this.addClass(item, 0, pseudo ? pseudo[1] : null)
             }
