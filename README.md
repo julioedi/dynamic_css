@@ -1,145 +1,176 @@
+# Dynamic CSS Sheet
 
-# CustomCssSheet
-
-`CustomCssSheet` is a lightweight, flexible JavaScript utility that dynamically generates and injects CSS styles based on utility class names found in your HTML. Inspired by utility-first frameworks like Tailwind CSS, it allows for custom class generation and real-time style application without any external CSS files or build steps.
-
-This tool is particularly useful for:
-- Creating consistent, atomic styles in pure JavaScript projects.
-- Rapid prototyping where responsiveness and layout precision matter.
-- Handling dynamic class generation in apps with real-time DOM updates.
+Dynamic CSS Sheet is a lightweight runtime CSS engine that generates utility classes on the fly.
+It works like a minimal Tailwind alternative — instead of requiring a build step, it injects CSS rules dynamically when classes appear in your HTML.
 
 ## Features
-
-- Supports responsive breakpoints (`xl:`, `md:`, `sm:`).
-- Dynamically generates styles for:
-  - **Transform utilities**
-  - **Text alignment and typography**
-  - **Sizing units (px, %, vw, vh)**
-  - **Spacing (margin, padding)**
-  - **Borders and radius**
-  - **Colors (standard CSS named colors)**
-  - **Display types**
-  - **Elevation/shadow levels**
-  - **Grid layouts**
-- Automatically observes DOM for class changes using `MutationObserver`.
+- Zero build step — include the script and it runs in the browser.
+- Responsive utilities (configurable breakpoint codes and sizes via `window.sizes`).
+- Custom dynamic colors via `window.dynamicCssColors` (creates `bg-<name>`, `border-<name>`, `color-<name>`, `outline-<name>` that map to `var(--<name>)`).
+- Utility-first syntax: spacing, sizing, positioning, flex, grid, shadows, transforms, etc.
+- Pseudo-states support: hover, focus, active, visited, link, checked, disabled, empty, valid, invalid, focus-within.
+- DOM observer — automatically adds rules for classes found in newly added elements or when class attributes change.
 
 ## Installation
 
-```js
-const cssSheet = new CustomCssSheet();
-```
-
-## Usage Example
+Place any optional configuration on `window` before loading the script, then include the script:
 
 ```html
-<div class="text-center bg-blue color-white p-16 radius-8 elevation-2 grid-3">
-  <div>Item 1</div>
-  <div>Item 2</div>
-  <div>Item 3</div>
-</div>
+<!-- Optional: configure breakpoints, scale and dynamic colors BEFORE the script loads -->
+<script>
+  // Customize responsive breakpoints (code -> min-width in px)
+  window.sizes = [
+    { code: "xs", size: 360 },
+    { code: "sm", size: 540 },
+    { code: "md", size: 768 },
+    { code: "lg", size: 1024 },
+    { code: "xl", size: 1366 },
+    { code: "xxl", size: 1440 }
+  ];
+
+  // Optional: change spacing/size scale (default 0.25) its scaled in REM
+  window.dynamiCssScale = 0.25;
+
+  // Optional: dynamic color keys. For each key the engine will generate
+  // classes that use var(--<key>), for example `bg-primary` => background-color: var(--primary)
+  window.dynamicCssColors = ["primary", "secondary", "accent"];
+</script>
+
+<script src="dynamic-css-sheet.js"></script>
 ```
 
-## Responsive Breakpoints
+## Usage
 
-| Prefix | Max Width |
-|--------|-----------|
-| `xl:`  | 1366px    |
-| `md:`  | 820px     |
-| `sm:`  | 640px     |
+### Colors
 
-Add a prefix to any class to apply it only under that screen width.
+Define the CSS variables in your stylesheet or `:root`:
 
-## Supported Class Categories
+```css
+:root {
+  --primary: #4f46e5;
+  --secondary: #f59e0b;
+  --accent: #10b981;
+}
+```
+
+Then use the generated utility classes (these come from `window.dynamicCssColors`):
+
+```html
+<div class="bg-primary color-primary border-primary">Box using CSS variable colors</div>
+```
+
+**Important:** the runtime expects dynamic color keys (in `window.dynamicCssColors`) to be provided **without** the `--` prefix. If you add `"primary"` to that array, the engine will produce classes such as `bg-primary` that resolve to `var(--primary)`.
+
+The engine also generates utilities for many built-in CSS color names (for example `bg-red`, `color-blue`, etc.).
+
+### Pseudo-states (hover, focus, etc.)
+
+This engine encodes pseudo-states as a literal suffix on the class name using a colon. That means you should append the pseudo at the **end** of the class name. Example:
+
+```html
+<!-- Change bg on hover -->
+<button class="bg-primary color-white bg-primary:hover">Hover me</button>
+
+<!-- Focus state -->
+<input class="border-1 border-primary border-1:focus"> <!-- note: pseudo appended to the classname -->
+
+<!-- Responsive + pseudo: apply on small-and-up, when hovered -->
+<div class="sm:bg-primary:hover">Small+ hover background</div>
+```
+
+**Note:** The engine expects the pseudo at the end of the full classname. The alternative notation `hover:bg-primary` (prefix form used by some utility frameworks) is **not** supported by this runtime. For responsive + pseudo use `sm:bg-name:hover` (responsive prefix first, pseudo appended last).
+
+Supported pseudo states (case-insensitive): `hover`, `focus`, `active`, `visited`, `link`, `checked`, `disabled`, `empty`, `valid`, `invalid`, `focus-within`.
+
+### Responsive utilities
+
+Responsive prefixing uses the breakpoint codes you provided in `window.sizes`. By default the runtime includes a set of breakpoints. Example usage:
+
+```html
+<!-- apply classes at different breakpoints -->
+<div class="w-10 sm:w-20 md:w-40 lg:w-80">Responsive widths</div>
+
+<!-- responsive + pseudo -->
+<button class="sm:bg-primary:hover lg:bg-secondary">Small+ hover then large bg</button>
+```
+
+Important details:
+- Provide `window.sizes` **before** loading the script if you want custom breakpoint codes or sizes.
+- The runtime creates one `<style>` sheet per breakpoint and inserts rules with `media` queries using the min-width values you provided.
+
+### Transforms
+
+Transforms are supported using utility-like names. Examples the engine understands include:
+
+```html
+<div class="transform-rotate-45">Rotated 45deg</div>
+<div class="transform-translateX-10">Translated on X</div>
+<!-- Or inline complex transform using bracket syntax -->
+<div class="transform-[translateX(20px)_scale(1.2)]">Custom transform</div>
+```
+
+### Spacing, sizing, grid, flex, shadows, etc.
+
+The runtime generates a large set of utilities (padding/margin with negative variants, width/height, min/max sizes, font size helpers, border-radius, grid templates, flex helpers, gap, elevation box-shadows, and more). See the code for the full list of generated utilities. Utilities depend on `window.dynamiCssScale` to convert indices into rem values (default 0.25).
+
+## Notes and gotchas
+
+- Because class names contain literal colons (`:`) you may need to escape or use framework-specific techniques when using single-file component syntaxes or templating systems that interpret `:` (for example, Vue template `:` shorthand). Using `v-bind:class` or double-quoted class attributes usually avoids issues.
+- Provide configuration (`window.sizes`, `window.dynamicCssColors`, `window.dynamiCssScale`) **before** the script tag that loads the runtime.
+- The runtime observes DOM mutations, so classes added dynamically by JavaScript will be processed automatically.
+- If you need a class name that contains characters that your HTML templating system strips or transforms, consider adding classes programmatically (element.classList.add) instead of writing them inline in markup.
+
+
+
+## 🛠 Usage Examples
+
+### 📐 Spacing
+```html
+<div class="m-4 p-2">Margin 4, Padding 2</div>
+<div class="sm:mt-8 lg:mb-16">Responsive margins</div>
+```
 
 ### 🎨 Colors
-
-```html
-<div class="background-blue color-white border-color-black"></div>
+Define your palette in CSS:
+```css
+:root {
+  --primary: #4f46e5;
+  --secondary: #f59e0b;
+}
 ```
 
-Supports all CSS color keywords.
-
-### 📏 Sizing
-
+Then use in HTML:
 ```html
-<div class="width-80 height-160 width-100\% vw-min-100 vh-max-100"></div>
+<button class="bg-[--primary] text-white hover:bg-[--secondary]">
+  Click Me
+</button>
 ```
 
-- Supports absolute (px), percentage (`\%`), and viewport units (vw, vh).
-
-### 🔤 Typography
-
+### 🧭 Positioning
 ```html
-<p class="text-16 text-rem-1_25 line-height-24 text-justify"></p>
+<div class="absolute top-0 left-0">Top Left</div>
+<div class="relative bottom-2 right-4">Relative box</div>
 ```
 
-- Font size, line-height, text alignment.
-
-### 📦 Spacing
-
+### 📏 Width & Height
 ```html
-<div class="p-16 px-12 pt-8 m-4 my-8 ml-2"></div>
+<div class="w-10 h-5 bg-gray-200"></div>
+<div class="sm:w-20 md:w-40 lg:w-80 h-full"></div>
 ```
 
-- Padding and margin on all/specific sides.
-
-### 🧱 Border & Radius
-
+### 📦 Flex and Grid
 ```html
-<div class="border-2 border-l-4 border-lr-4 radius-12 border-tr-8"></div>
+<div class="flex gap-4 justify-center">
+  <div class="bg-gray-200 p-2">Item 1</div>
+  <div class="bg-gray-200 p-2">Item 2</div>
+</div>
+
+<div class="grid grid-cols-3 gap-2">
+  <div class="bg-gray-200 p-2">A</div>
+  <div class="bg-gray-200 p-2">B</div>
+  <div class="bg-gray-200 p-2">C</div>
+</div>
 ```
-
-- Fully granular border control and radii.
-
-### 📍 Positioning
-
-```html
-<div class="position-absolute pos-top-0 pos-left-50\% inset-0"></div>
-```
-
-- Position type and side offsets.
-
-### 🌀 Transform Utilities
-
-```html
-<div class="transform-[rotate(45deg)_translateX(20px)] transform-rotate-45"></div>
-```
-
-- Supports custom and shorthand transforms.
-
-### 🌫️ Elevation
-
-```html
-<div class="elevation-4 elevation-8-alpha-60"></div>
-```
-
-- Material-style shadow system with optional alpha.
-
-### 🧮 Grid Layouts
-
-```html
-<div class="grid-1"> <!-- 1 column --> </div>
-<div class="grid-3"> <!-- 3 equal columns --> </div>
-<div class="grid-12"> <!-- 12-column grid --> </div>
-```
-
-These classes apply `display: grid` and set `grid-template-columns: repeat(n, 1fr)`.
-
-Useful for quickly laying out responsive grid items without manually writing CSS.
-
-You can combine it with responsive variants:
-
-```html
-<div class="grid-4 md:grid-2 sm:grid-1"></div>
-```
-
-This enables fluid layout transitions based on screen size.
-
-## Notes
-
-- Utility classes are parsed only if they match supported patterns.
-- Escaping (`\%`) is required for special characters like `%`.
-- Uses a single style tag (`#dynamic-css-sheet`) for clean injection.
 
 ## License
 
